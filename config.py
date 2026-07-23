@@ -38,6 +38,10 @@ class Config:
     RAPIDAPI_INDIANJOBS_KEY = os.environ.get('RAPIDAPI_INDIANJOBS_KEY', '')
     RAPIDAPI_INDIANJOBS_HOST = os.environ.get('RAPIDAPI_INDIANJOBS_HOST', 'indian-jobs-api.p.rapidapi.com')
 
+    # JSearch API (covers Indeed, Glassdoor, LinkedIn via RapidAPI)
+    RAPIDAPI_JSEARCH_KEY = os.environ.get('RAPIDAPI_JSEARCH_KEY', '')
+    RAPIDAPI_JSEARCH_HOST = os.environ.get('RAPIDAPI_JSEARCH_HOST', 'jsearch.p.rapidapi.com')
+
     # Pagination
     PER_PAGE = 10
 

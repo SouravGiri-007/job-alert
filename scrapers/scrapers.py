@@ -9,7 +9,7 @@ import time
 import random
 import bleach
 from datetime import datetime, timezone
-from urllib.parse import urljoin, quote
+from urllib.parse import urljoin
 from utils.logger import get_logger, log_event
 
 logger = get_logger('scrapers')
@@ -375,249 +375,7 @@ class LinkedInScraper(BaseScraper):
 
 
 # ─────────────────────────────────────────────
-# 3. Indeed Scraper
-# ─────────────────────────────────────────────
-class IndeedScraper(BaseScraper):
-    """Scraper for Indeed — global job search platform.
-    Uses India-specific portal (in.indeed.com).
-    Includes anti-block measures: homepage cookie warmup, rotating UAs, modern headers.
-    """
-
-    source_name = 'Indeed'
-    base_url = 'https://in.indeed.com'
-
-    SEARCH_QUERIES = [
-        'python developer',
-        'react developer',
-        'java developer',
-        'data scientist',
-        'full stack developer',
-        'devops engineer',
-        'frontend developer',
-        'backend developer',
-        'machine learning engineer',
-        'software engineer',
-    ]
-
-    # Modern browser headers to avoid 403
-    CHROME_HEADERS = [
-        {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-IN,en-US;q=0.9,en;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"Windows"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
-            'Connection': 'keep-alive',
-        },
-        {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Sec-Ch-Ua': '"Google Chrome";v="126", "Chromium";v="126", "Not.A/Brand";v="24"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"macOS"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
-            'Connection': 'keep-alive',
-        },
-    ]
-
-    def _warmup_session(self, session):
-        """Visit Indeed homepage first to get cookies before making search requests."""
-        try:
-            session.headers.update(random.choice(self.CHROME_HEADERS))
-            resp = session.get('https://in.indeed.com/', timeout=20, allow_redirects=True)
-            if resp.status_code == 200:
-                logger.info('Indeed: Homepage warmup successful (cookies acquired)')
-                return True
-            else:
-                logger.warning(f'Indeed: Homepage warmup returned {resp.status_code}')
-                return False
-        except Exception as e:
-            logger.warning(f'Indeed: Homepage warmup failed: {e}')
-            return False
-
-    def scrape(self):
-        jobs = []
-        session = get_session()
-
-        # Warm up session with homepage visit to get cookies
-        self._warmup_session(session)
-        time.sleep(random.uniform(2, 4))
-
-        for query in self.SEARCH_QUERIES:
-            try:
-                # Rotate headers per-query
-                session.headers.update(random.choice(self.CHROME_HEADERS))
-
-                params = {
-                    'q': query,
-                    'l': 'India',
-                    'sort': 'date',
-                }
-                url = f'{self.base_url}/jobs'
-
-                # Longer random delay per query
-                time.sleep(random.uniform(3.0, 6.0))
-
-                try:
-                    response = session.get(url, params=params, timeout=30, allow_redirects=True)
-                    if response.status_code == 403 or response.status_code == 429:
-                        logger.warning(f'Indeed 403/429 on "{query}" — waiting longer and retrying...')
-                        time.sleep(random.uniform(8, 12))
-                        session.headers.update(random.choice(self.CHROME_HEADERS))
-                        response = session.get(url, params=params, timeout=30, allow_redirects=True)
-
-                    response.raise_for_status()
-
-                    content_type = response.headers.get('Content-Type', '')
-                    if 'text/html' not in content_type and 'text/xml' not in content_type:
-                        logger.warning(f'Indeed: Non-HTML response for "{query}": {content_type}')
-                        continue
-
-                    text = response.text
-                    text_lower = text.lower()
-                    block_signals = [
-                        'captcha', 'robot check', 'access denied', 'cloudflare',
-                        'just a moment', 'blocked', 'unusual traffic',
-                        'verify you are human', 'checking your browser',
-                    ]
-                    blocked = any(s in text_lower for s in block_signals) and len(text) < 15000
-
-                    if blocked:
-                        logger.warning(f'Indeed: Anti-bot triggered for "{query}" — skipping')
-                        continue
-
-                    soup = BeautifulSoup(text, 'html.parser')
-                except requests.exceptions.HTTPError as e:
-                    if e.response.status_code in (403, 429):
-                        logger.warning(f'Indeed: Still blocked ({e.response.status_code}) on "{query}" after retry')
-                        continue
-                    else:
-                        logger.warning(f'Indeed: HTTP {e.response.status_code} on "{query}"')
-                        continue
-
-                found = self._parse_listings(soup, jobs)
-                if found > 0:
-                    logger.info(f'Indeed: {found} jobs for "{query}"')
-                if len(jobs) >= 60:
-                    break
-            except Exception as e:
-                logger.error(f'Indeed error for {query}: {e}')
-                continue
-
-        return self.deduplicate(jobs, limit=60)
-
-    def _parse_listings(self, soup, jobs):
-        """Parse Indeed job cards from search results.
-        Card structure:
-          <div class="job_seen_beacon"> or <div class="job-card-container">
-            <h2><a class="jobTitle" ...>Job Title</a></h2>
-            <span class="companyName">Company</span>
-            <div class="companyLocation">Location</div>
-            <div class="salary-snippet">Salary</div>
-            <div class="job-snippet">Description snippet</div>
-        """
-        cards = soup.select('div.job_seen_beacon, div.job-card-container, div[id^="job_"]')
-        if not cards:
-            cards = soup.select('[class*="job-card"], [class*="result"]')
-
-        count = 0
-        for card in cards[:30]:
-            try:
-                # Title
-                title_el = card.select_one('h2 a.jobTitle, a.jobTitle, h2 a[class*="title"], a[class*="title"]')
-                if not title_el:
-                    title_el = card.select_one('h2 a')
-                if not title_el:
-                    title_el = card.select_one('a[data-testid="job-link"]')
-                if not title_el:
-                    continue
-
-                title = self.clean_text(title_el.get_text())
-                href = title_el.get('href', '')
-                if href and not href.startswith('http'):
-                    href = self.base_url + href
-                if not title or len(title) < 4:
-                    continue
-
-                # Company
-                company_el = card.select_one('span.companyName, [class*="company"] a, [class*="companyName"]')
-                company = self.clean_text(company_el.get_text()) if company_el else ''
-                if not company:
-                    company_el = card.select_one('[data-testid*="company"]')
-                    company = self.clean_text(company_el.get_text()) if company_el else ''
-
-                # Location
-                loc_el = card.select_one('div.companyLocation, [class*="location"]')
-                location = self.clean_text(loc_el.get_text()) if loc_el else 'India'
-
-                # Salary
-                salary_el = card.select_one('div.salary-snippet span, [class*="salary"], [data-testid*="salary"]')
-                salary = self.clean_text(salary_el.get_text()) if salary_el else ''
-
-                # Skills — Indeed doesn't list skills directly, infer from title
-                skills = ''
-                known_skills = ['python', 'java', 'javascript', 'react', 'angular', 'vue', 'aws',
-                                'docker', 'kubernetes', 'node', 'django', 'flask', 'sql', 'mongodb']
-                title_lower = title.lower()
-                matched = [s for s in known_skills if s in title_lower]
-                if matched:
-                    skills = ', '.join(matched)
-
-                # Posted date
-                date_el = card.select_one('span.date, [class*="date"], span[class*="posted"]')
-                posted = self.clean_text(date_el.get_text()) if date_el else 'Recently'
-
-                # Job type
-                job_type = 'Full-time'
-                title_lower = title.lower()
-                if 'intern' in title_lower:
-                    job_type = 'Internship'
-                elif 'part-time' in title_lower or 'part time' in title_lower:
-                    job_type = 'Part-time'
-                elif 'contract' in title_lower:
-                    job_type = 'Contract'
-
-                # Description snippet
-                desc_el = card.select_one('div.job-snippet, [class*="snippet"], [data-testid*="snippet"]')
-                description = self.clean_text(desc_el.get_text()) if desc_el else ''
-
-                job_data = {
-                    'title': title,
-                    'company': company,
-                    'location': location if location else 'India',
-                    'salary': salary,
-                    'skills': skills,
-                    'url': href,
-                    'source': self.source_name,
-                    'job_type': job_type,
-                    'posted_date': posted,
-                    'description': description,
-                }
-                jobs.append(self.sanitize_job_data(job_data))
-                count += 1
-            except Exception as e:
-                logger.debug(f'Skip Indeed listing: {e}')
-                continue
-        return count
-
-
-# ─────────────────────────────────────────────
-# 4. Naukri Scraper
+# 3. LinkedIn Public HTML Scraper
 # ─────────────────────────────────────────────
 class NaukriScraper(BaseScraper):
     """Scraper for Naukri.com — India's largest job portal.
@@ -873,11 +631,10 @@ class NaukriScraper(BaseScraper):
             except Exception as e:
                 logger.debug(f'Skip Naukri listing: {e}')
                 continue
-        return count
 
 
 # ─────────────────────────────────────────────
-# 5. Glassdoor Scraper
+# 4. Demo Fallback (only used if all real scrapers return 0)
 # ─────────────────────────────────────────────
 class GlassdoorScraper(BaseScraper):
     """Scraper for Glassdoor — company reviews and job listings.
@@ -1116,11 +873,9 @@ class GlassdoorScraper(BaseScraper):
             except Exception as e:
                 logger.debug(f'Skip Glassdoor listing: {e}')
                 continue
-        return count
-
-
+    
 # ─────────────────────────────────────────────
-# Demo Fallback (only used if all real scrapers return 0)
+# 5. Demo Fallback (only used if all real scrapers return 0)
 # ─────────────────────────────────────────────
 class DemoScraper(BaseScraper):
     """Fallback demo scraper — only used when real scrapers return 0 jobs."""
@@ -1390,15 +1145,247 @@ class RapidAPIJobsScraper(BaseScraper):
 
 
 # ─────────────────────────────────────────────
+# 7. JSearch API Scraper (replaces Indeed, Glassdoor, LinkedIn)
+# ─────────────────────────────────────────────
+class JSearchScraper(BaseScraper):
+    """Job search via JSearch RapidAPI — aggregates data from Indeed, Glassdoor, LinkedIn, and more.
+
+    API: GET https://jsearch.p.rapidapi.com/search
+    Requires RAPIDAPI_JSEARCH_KEY to be set in the app config.
+    """
+
+    source_name = 'JSearch'
+    base_url = 'https://jsearch.p.rapidapi.com'
+
+    SEARCH_QUERIES = [
+        'python developer India',
+        'react developer India',
+        'java developer India',
+        'data scientist India',
+        'full stack developer India',
+        'devops engineer India',
+        'frontend developer India',
+        'backend developer India',
+        'machine learning engineer India',
+        'software engineer Bangalore',
+    ]
+
+    def _get_api_key(self):
+        try:
+            from flask import current_app
+            key = current_app.config.get('RAPIDAPI_JSEARCH_KEY', '')
+        except (RuntimeError, ImportError):
+            import os
+            key = os.environ.get('RAPIDAPI_JSEARCH_KEY', '')
+        if not key:
+            logger.warning('RAPIDAPI_JSEARCH_KEY not configured — JSearchScraper will return 0 jobs')
+        return key
+
+    def _get_api_host(self):
+        try:
+            from flask import current_app
+            host = current_app.config.get('RAPIDAPI_JSEARCH_HOST', 'jsearch.p.rapidapi.com')
+        except (RuntimeError, ImportError):
+            host = 'jsearch.p.rapidapi.com'
+        return host
+
+    def scrape(self):
+        api_key = self._get_api_key()
+        if not api_key:
+            return []
+
+        api_host = self._get_api_host()
+        headers = {
+            'x-rapidapi-host': api_host,
+            'x-rapidapi-key': api_key,
+        }
+
+        jobs = []
+
+        for query in self.SEARCH_QUERIES:
+            try:
+                params = {
+                    'query': query,
+                    'page': '1',
+                    'num_pages': '1',
+                    'country': 'in',
+                }
+
+                time.sleep(random.uniform(0.5, 1.0))
+                response = requests.get(
+                    f'{self.base_url}/search',
+                    params=params,
+                    headers=headers,
+                    timeout=20,
+                )
+
+                if response.status_code == 429:
+                    logger.warning('JSearch rate-limited — backing off')
+                    time.sleep(5)
+                    continue
+
+                if response.status_code == 401 or response.status_code == 403:
+                    logger.error(f'JSearch auth failed ({response.status_code}) — check RAPIDAPI_JSEARCH_KEY')
+                    break
+
+                response.raise_for_status()
+                data = response.json()
+                found = self._parse_response(data, jobs)
+
+                if found > 0:
+                    logger.info(f'JSearch: {found} jobs for "{query}"')
+
+                if len(jobs) >= 80:
+                    break
+
+            except requests.exceptions.Timeout:
+                logger.warning(f'JSearch timeout for "{query}"')
+                continue
+            except requests.exceptions.RequestException as e:
+                logger.warning(f'JSearch request error for "{query}": {e}')
+                continue
+            except ValueError as e:
+                logger.warning(f'JSearch JSON parse error for "{query}": {e}')
+                continue
+            except Exception as e:
+                logger.error(f'JSearch error for "{query}": {e}')
+                continue
+
+        return self.deduplicate(jobs, limit=80)
+
+    def _parse_response(self, data, jobs):
+        """Parse JSearch API response into job data dicts.
+
+        Expected response shape:
+        {
+            'status': 'OK',
+            'data': [
+                {
+                    'job_title': '...',
+                    'employer_name': '...',
+                    'job_city': '...',
+                    'job_state': '...',
+                    'job_country': 'IN',
+                    'job_min_salary': ...,
+                    'job_max_salary': ...,
+                    'job_description': '...',
+                    'job_apply_link': '...',
+                    'job_required_skills': '...',
+                    'job_employment_type': 'FULLTIME',
+                    'job_posted_at_datetime_utc': '...',
+                }
+            ]
+        }
+        """
+        if not isinstance(data, dict):
+            return 0
+
+        listings = data.get('data', [])
+        if not isinstance(listings, list) or len(listings) == 0:
+            return 0
+
+        count = 0
+        for item in listings[:30]:
+            try:
+                if not isinstance(item, dict):
+                    continue
+
+                title = item.get('job_title', '') or ''
+                if not title or len(str(title).strip()) < 4:
+                    continue
+
+                company = item.get('employer_name', '') or ''
+                city = item.get('job_city', '') or ''
+                state = item.get('job_state', '') or ''
+                country = item.get('job_country', '') or ''
+
+                # Build location string
+                location_parts = [p for p in [city, state, 'India' if country and (country.upper() == 'IN' or 'india' in country.lower()) else country] if p]
+                location = ', '.join(location_parts) if location_parts else 'India'
+
+                # Build salary string
+                min_sal = item.get('job_min_salary')
+                max_sal = item.get('job_max_salary')
+                salary = ''
+                if min_sal or max_sal:
+                    if min_sal and max_sal:
+                        salary = f'{int(min_sal):,} - {int(max_sal):,} INR'
+                    elif min_sal:
+                        salary = f'From {int(min_sal):,} INR'
+                    elif max_sal:
+                        salary = f'Up to {int(max_sal):,} INR'
+
+                description = item.get('job_description', '') or ''
+                url = item.get('job_apply_link', '') or ''
+                posted = item.get('job_posted_at_datetime_utc', '') or ''
+                if posted and len(posted) > 10:
+                    posted = posted[:10]  # Just the date part
+
+                # Skills
+                skills_raw = item.get('job_required_skills', '')
+                if isinstance(skills_raw, list):
+                    skills = ', '.join(str(s) for s in skills_raw if s)
+                else:
+                    skills = str(skills_raw) if skills_raw else ''
+
+                # Infer skills from title if none provided
+                title_lower = str(title).lower()
+                if not skills:
+                    known_skills = ['python', 'java', 'javascript', 'react', 'angular', 'vue',
+                                    'aws', 'docker', 'kubernetes', 'node', 'django', 'flask',
+                                    'sql', 'mongodb', 'typescript', 'go', 'rust', 'c++', 'ruby']
+                    matched = [s for s in known_skills if s in title_lower]
+                    if matched:
+                        skills = ', '.join(matched)
+
+                # Job type
+                emp_type = item.get('job_employment_type', '') or ''
+                job_type_map = {
+                    'FULLTIME': 'Full-time',
+                    'PARTTIME': 'Part-time',
+                    'CONTRACTOR': 'Contract',
+                    'INTERN': 'Internship',
+                    'FREELANCE': 'Freelance',
+                    'TEMPORARY': 'Contract',
+                }
+                job_type = job_type_map.get(emp_type.upper(), 'Full-time')
+                if job_type == 'Full-time':
+                    if 'intern' in title_lower:
+                        job_type = 'Internship'
+                    elif 'part-time' in title_lower or 'part time' in title_lower:
+                        job_type = 'Part-time'
+                    elif 'contract' in title_lower:
+                        job_type = 'Contract'
+
+                job_data = {
+                    'title': str(title),
+                    'company': str(company) if company else 'Unknown',
+                    'location': location,
+                    'salary': salary,
+                    'skills': skills,
+                    'url': url,
+                    'source': self.source_name,
+                    'job_type': job_type,
+                    'posted_date': posted if posted else 'Recently',
+                    'description': str(description)[:2000] if description else '',
+                }
+                jobs.append(self.sanitize_job_data(job_data))
+                count += 1
+            except Exception as e:
+                logger.debug(f'Skip JSearch listing: {e}')
+                continue
+
+        return count
+
+
+# ─────────────────────────────────────────────
 # Registry
 # ─────────────────────────────────────────────
 SCRAPER_REGISTRY = {
     'internshala': InternshalaScraper,
     'linkedin': LinkedInScraper,
-    'indeed': IndeedScraper,
-    'naukri': NaukriScraper,
-    'glassdoor': GlassdoorScraper,
     'rapidapi': RapidAPIJobsScraper,
+    'jsearch': JSearchScraper,
     'demo': DemoScraper,
 }
 
