@@ -286,19 +286,11 @@ class RapidAPIJobsScraper(BaseScraper):
 
     SEARCH_QUERIES = [
         ('python developer', 'Bangalore'),
-        ('python developer', 'Hyderabad'),
-        ('react developer', 'Bangalore'),
         ('java developer', 'Bangalore'),
-        ('java developer', 'Mumbai'),
+        ('react developer', 'Bangalore'),
         ('data scientist', 'Bangalore'),
         ('full stack developer', 'Bangalore'),
-        ('full stack developer', 'Delhi'),
-        ('devops engineer', 'Bangalore'),
-        ('frontend developer', 'Bangalore'),
-        ('backend developer', 'Bangalore'),
-        ('machine learning engineer', 'Hyderabad'),
         ('software engineer', 'Bangalore'),
-        ('software engineer', 'Pune'),
     ]
 
     def _get_api_key(self):
@@ -599,11 +591,19 @@ class JSearchScraper(BaseScraper):
                     time.sleep(5)
                     continue
 
+                if response.status_code == 404:
+                    logger.warning(f'JSearch endpoint not found — your API plan may not include /search. Run 1 query once and skip remaining.')
+                    # Still parse any data we got (unlikely for 404, but safe)
+                    break
+
                 if response.status_code == 401 or response.status_code == 403:
                     logger.error(f'JSearch auth failed ({response.status_code}) — check RAPIDAPI_JSEARCH_KEY')
                     break
 
-                response.raise_for_status()
+                if response.status_code != 200:
+                    logger.warning(f'JSearch HTTP {response.status_code} for "{query}"')
+                    continue
+
                 data = response.json()
                 found = self._parse_response(data, jobs)
 

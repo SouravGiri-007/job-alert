@@ -340,15 +340,29 @@ def logs():
 @admin_bp.route('/run-scraper', methods=['POST'])
 @login_required
 def run_scraper():
-    """Manually trigger the scraper."""
+    """Manually trigger the scraper in background (non-blocking).
+    Returns immediately — scrape continues in a background thread.
+    """
+    import threading
     from scheduler.scheduler import scrape_all_jobs
-    try:
-        new_jobs = scrape_all_jobs()
-        flash_success(f'Scraper completed! Found {new_jobs} new jobs.')
-        log_event('MANUAL_SCRAPE', f'Admin triggered manual scrape: {new_jobs} new jobs')
-    except Exception as e:
-        flash_error(f'Scraper failed: {str(e)}')
-        log_event('SCRAPER_FAILED', f'Manual scrape failed: {str(e)}', 'error')
+    # Capture app object before thread starts (current_app proxy may expire once request ends)
+    _app = current_app._get_current_object()
+
+    def _run():
+        """Run scrape in a background thread with its own app context."""
+        with _app.app_context():
+            try:
+                new_jobs = scrape_all_jobs()
+                logger.info(f'Background scrape complete: {new_jobs} new jobs')
+                log_event('MANUAL_SCRAPE', f'Background scrape: {new_jobs} new jobs')
+            except Exception as e:
+                logger.error(f'Background scrape failed: {e}')
+                log_event('SCRAPER_FAILED', f'Background scrape: {str(e)}', 'error')
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    flash_success('Scraper started in background. Results will appear in scraper history when done.')
     return redirect(url_for('admin.dashboard'))
 
 
