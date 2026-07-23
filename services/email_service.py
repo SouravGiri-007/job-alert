@@ -49,7 +49,8 @@ def _send_single(to_email, subject, html_body, text_body=''):
 
         with smtplib.SMTP(
             current_app.config['SMTP_SERVER'],
-            current_app.config['SMTP_PORT']
+            current_app.config['SMTP_PORT'],
+            timeout=10
         ) as server:
             server.starttls()
             if current_app.config['SMTP_USERNAME']:

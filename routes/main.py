@@ -111,7 +111,7 @@ def subscribe():
         flash('check_spam', 'check_spam')
     except Exception as e:
         log_event('EMAIL_FAILED', f'Verification email failed: {str(e)}', 'error')
-        flash('check_spam', 'check_spam')
+        flash_info('Subscribed! Verification will be sent once the email service is ready.')
 
     log_event('NEW_SUBSCRIBER', f'New subscriber: {email}')
     return redirect(url_for('main.index') + '#subscribe')
