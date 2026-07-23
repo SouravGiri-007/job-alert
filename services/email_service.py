@@ -1,5 +1,6 @@
 """Email service for sending job alerts with parallel delivery support."""
 import smtplib
+import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -47,12 +48,18 @@ def _send_single(to_email, subject, html_body, text_body=''):
             msg.attach(MIMEText(text_body, 'plain'))
         msg.attach(MIMEText(html_body, 'html'))
 
-        with smtplib.SMTP(
-            current_app.config['SMTP_SERVER'],
-            current_app.config['SMTP_PORT'],
-            timeout=10
-        ) as server:
+        smtp_host = current_app.config['SMTP_SERVER']
+        smtp_port = current_app.config['SMTP_PORT']
+
+        # Force IPv4 resolution — Render doesn't route outbound IPv6,
+        # and smtp.gmail.com resolves to an IPv6 address by default.
+        addr_info = socket.getaddrinfo(smtp_host, smtp_port, socket.AF_INET, socket.SOCK_STREAM)
+        ipv4_addr = addr_info[0][4][0]
+
+        with smtplib.SMTP(ipv4_addr, smtp_port, timeout=10) as server:
+            server.ehlo(smtp_host)  # explicit EHLO since we're connecting by IP, not hostname
             server.starttls()
+            server.ehlo(smtp_host)
             if current_app.config['SMTP_USERNAME']:
                 server.login(
                     current_app.config['SMTP_USERNAME'],
@@ -68,7 +75,7 @@ def _send_single(to_email, subject, html_body, text_body=''):
         logger.error(f'Email send error for {to_email}: {e}')
         return (to_email, False, error_msg)
 
-
+    
 def send_email(to_email, subject, html_body, text_body=''):
     """Send an email via SMTP (single send — backward compatible)."""
     _, success, error = _send_single(to_email, subject, html_body, text_body)
