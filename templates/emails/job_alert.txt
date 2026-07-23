@@ -1,0 +1,21 @@
+Hi {{ subscriber.email.split('@')[0] }},
+
+We found {{ jobs|length }} new job{{ 's' if jobs|length != 1 }} matching your preferences:
+
+{% for job in jobs %}
+{{ loop.index }}. {{ job.title }}
+   Company: {{ job.company }}
+   Location: {{ job.location or 'N/A' }}
+   {% if job.salary %}Salary: {{ job.salary }}{% endif %}
+   {% if job.url %}Apply: {{ job.url }}{% endif %}
+
+{% endfor %}
+
+---
+Your preferences:
+{% if subscriber.role %}Role: {{ subscriber.role }}{% endif %}
+{% if subscriber.skills %}Skills: {{ subscriber.skills }}{% endif %}
+{% if subscriber.location %}Location: {{ subscriber.location }}{% endif %}
+
+To unsubscribe: {{ app_url }}/unsubscribe/{{ subscriber.verification_token }}
+{{ app_name }}

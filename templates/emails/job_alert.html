@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f6f9; }
+        .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, #0d6efd, #6610f2); color: white; padding: 30px 30px 20px; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .header p { margin: 8px 0 0; opacity: 0.9; font-size: 14px; }
+        .body { padding: 25px 30px; }
+        .job-card { border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: background 0.2s; }
+        .job-card:hover { background-color: #f8f9fa; }
+        .job-title { font-size: 16px; font-weight: 600; color: #212529; margin: 0 0 6px; }
+        .job-meta { font-size: 13px; color: #6c757d; margin: 0 0 4px; }
+        .job-skills { margin: 8px 0 0; }
+        .skill-tag { display: inline-block; background: #e7f1ff; color: #0d6efd; padding: 2px 10px; border-radius: 12px; font-size: 11px; margin: 2px 4px 2px 0; }
+        .job-salary { color: #198754; font-weight: 600; font-size: 13px; margin: 4px 0 0; }
+        .apply-btn { display: inline-block; background: #0d6efd; color: white !important; text-decoration: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; margin-top: 8px; }
+        .apply-btn:hover { background: #0b5ed7; }
+        .job-number { display: inline-block; background: #0d6efd; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 600; margin-right: 10px; }
+        .footer { background: #f8f9fa; padding: 20px 30px; text-align: center; }
+        .footer p { color: #6c757d; font-size: 12px; margin: 4px 0; }
+        .unsubscribe { color: #dc3545; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ app_name }}</h1>
+            <p>Your personalized job alert is here!</p>
+        </div>
+        <div class="body">
+            <p>Hi <strong>{{ subscriber.email.split('@')[0] }}</strong>,</p>
+            <p>We found <strong>{{ jobs|length }} new job{{ 's' if jobs|length != 1 }}</strong> matching your preferences:</p>
+
+            {% for job in jobs %}
+            <div class="job-card">
+                <div style="display: flex; align-items: flex-start;">
+                    <span class="job-number">{{ loop.index }}</span>
+                    <div style="flex: 1;">
+                        <div class="job-title">{{ job.title }}</div>
+                        <div class="job-meta">
+                            {{ job.company }}
+                            {% if job.location %} &bull; {{ job.location }}{% endif %}
+                            {% if job.job_type %} &bull; {{ job.job_type }}{% endif %}
+                        </div>
+                        {% if job.salary %}
+                        <div class="job-salary">{{ job.salary }}</div>
+                        {% endif %}
+                        {% if job.skills %}
+                        <div class="job-skills">
+                            {% for skill in job.get_skills_list()[:5] %}
+                            <span class="skill-tag">{{ skill }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if job.url %}
+                        <a href="{{ job.url }}" class="apply-btn" target="_blank">Apply Now &rarr;</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <p style="color: #6c757d; font-size: 13px; margin-top: 20px;">
+                These jobs were matched based on your preferences:
+                {% if subscriber.role %}Role: <strong>{{ subscriber.role }}</strong>. {% endif %}
+                {% if subscriber.skills %}Skills: <strong>{{ subscriber.skills }}</strong>. {% endif %}
+                {% if subscriber.location %}Location: <strong>{{ subscriber.location }}</strong>.{% endif %}
+            </p>
+        </div>
+        <div class="footer">
+            <p>You're receiving this because you subscribed to {{ app_name }}.</p>
+            <p>
+                <a href="{{ app_url }}/unsubscribe/{{ subscriber.verification_token }}" class="unsubscribe">Unsubscribe</a>
+                &bull; <a href="{{ app_url }}" style="color: #6c757d;">Update Preferences</a>
+            </p>
+            <p>&copy; {{ app_name }}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

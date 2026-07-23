@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Admin{% endblock %}
+
+{% set is_admin = true %}
+{% set show_footer = false %}
+
+{% block extra_css %}
+<style>
+.stat-card { transition: transform 0.2s, box-shadow 0.2s; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Admin Nav Tabs -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item"><a class="nav-link active" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.subscribers') }}"><i class="bi bi-people me-1"></i>Subscribers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.jobs') }}"><i class="bi bi-briefcase me-1"></i>Jobs</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.email_history') }}"><i class="bi bi-envelope me-1"></i>Emails</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.scraper_history') }}"><i class="bi bi-arrow-repeat me-1"></i>Scrapers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.logs') }}"><i class="bi bi-terminal me-1"></i>Logs</a></li>
+    </ul>
+
+    <!-- Action Buttons -->
+    <div class="d-flex gap-2 mb-4 flex-wrap">
+        <form method="POST" action="{{ url_for('admin.run_scraper') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Run scraper now?')">
+                <i class="bi bi-play-fill me-1"></i>Run Scraper
+            </button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.run_alerts') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('Send email alerts now?')">
+                <i class="bi bi-send-fill me-1"></i>Send Emails
+            </button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.retry_failed') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-warning btn-sm text-dark" onclick="return confirm('Retry all failed emails?')">
+                <i class="bi bi-arrow-clockwise me-1"></i>Retry Failed
+            </button>
+        </form>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><i class="bi bi-people me-1"></i>Subscribers</div>
+                    <div class="h4 fw-bold mb-0">{{ total_subscribers }}</div>
+                    <small class="text-success"><i class="bi bi-check-circle me-1"></i>{{ total_verified }} verified</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><i class="bi bi-briefcase me-1"></i>Jobs Today</div>
+                    <div class="h4 fw-bold mb-0">{{ jobs_today }}</div>
+                    <small class="text-muted">of {{ total_jobs }} total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="card stat-card border-0 shadow-sm bg-success bg-opacity-10 h-100">
+                <div class="card-body">
+                    <div class="text-success small"><i class="bi bi-send-fill me-1"></i>Emails Sent</div>
+                    <div class="h4 fw-bold mb-0 text-success">{{ emails_sent_today }}</div>
+                    <small class="text-muted">today</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="card stat-card border-0 shadow-sm bg-danger bg-opacity-10 h-100">
+                <div class="card-body">
+                    <div class="text-danger small"><i class="bi bi-exclamation-triangle me-1"></i>Failed</div>
+                    <div class="h4 fw-bold mb-0 text-danger">{{ failed_emails_today }}</div>
+                    <small class="text-muted">today</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><i class="bi bi-globe me-1"></i>Sources</div>
+                    <div class="h4 fw-bold mb-0">{{ active_sources }}</div>
+                    <small class="text-muted">active</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><i class="bi bi-clock me-1"></i>Scheduler</div>
+                    <div class="h6 fw-bold mb-0">
+                        {% if scheduled_jobs %}
+                            {% for j in scheduled_jobs[:1] %}
+                                <small>{{ j.next_run[:16] if j.next_run != 'N/A' else 'N/A' }}</small>
+                            {% endfor %}
+                        {% else %}
+                            <small class="text-warning">Not running</small>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted">next run</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="fw-semibold mb-0"><i class="bi bi-graph-up me-2"></i>Subscriber Growth (7 days)</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="subscriberChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="fw-semibold mb-0"><i class="bi bi-envelope-paper me-2"></i>Email Activity (7 days)</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="emailChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <!-- Source Distribution -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="fw-semibold mb-0"><i class="bi bi-pie-chart me-2"></i>Job Sources</h6>
+                </div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <canvas id="sourceChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <!-- Recent Emails -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="fw-semibold mb-0"><i class="bi bi-envelope me-2"></i>Recent Emails</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Email</th><th>Jobs</th><th>Status</th></tr></thead>
+                            <tbody>
+                                {% for e in recent_emails %}
+                                <tr>
+                                    <td class="small">{{ e.subscriber.email[:25] if e.subscriber else 'N/A' }}</td>
+                                    <td>{{ e.jobs_sent }}</td>
+                                    <td>
+                                        {% if e.status == 'sent' %}
+                                        <span class="badge bg-success bg-opacity-10 text-success">Sent</span>
+                                        {% else %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="3" class="text-center text-muted small py-3">No emails sent yet</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Recent Scrapes -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="fw-semibold mb-0"><i class="bi bi-arrow-repeat me-2"></i>Recent Scrapes</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Source</th><th>Found</th><th>Status</th></tr></thead>
+                            <tbody>
+                                {% for s in recent_scrapes %}
+                                <tr>
+                                    <td class="small">{{ s.source[:20] }}</td>
+                                    <td>{{ s.jobs_found }}</td>
+                                    <td>
+                                        {% if s.status == 'success' %}
+                                        <span class="badge bg-success bg-opacity-10 text-success">{{ format_duration(s.duration) }}</span>
+                                        {% else %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="3" class="text-center text-muted small py-3">No scrapes yet</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Subscriber Growth Chart
+const subCtx = document.getElementById('subscriberChart').getContext('2d');
+new Chart(subCtx, {
+    type: 'line',
+    data: {
+        labels: {{ subscriber_growth | map(attribute='date') | list | tojson }},
+        datasets: [{
+            label: 'New Subscribers',
+            data: {{ subscriber_growth | map(attribute='count') | list | tojson }},
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#0d6efd',
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+});
+
+// Email Activity Chart
+const emailCtx = document.getElementById('emailChart').getContext('2d');
+new Chart(emailCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ email_stats | map(attribute='date') | list | tojson }},
+        datasets: [
+            { label: 'Sent', data: {{ email_stats | map(attribute='sent') | list | tojson }}, backgroundColor: 'rgba(25, 135, 84, 0.7)' },
+            { label: 'Failed', data: {{ email_stats | map(attribute='failed') | list | tojson }}, backgroundColor: 'rgba(220, 53, 69, 0.7)' },
+        ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+});
+
+// Source Distribution Chart
+const srcCtx = document.getElementById('sourceChart').getContext('2d');
+const colors = ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14', '#20c997'];
+new Chart(srcCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ source_data | map(attribute=0) | list | tojson }},
+        datasets: [{ data: {{ source_data | map(attribute=1) | list | tojson }}, backgroundColor: colors }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+});
+</script>
+{% endblock %}

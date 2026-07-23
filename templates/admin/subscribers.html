@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Subscribers - Admin{% endblock %}
+{% set is_admin = true %}
+{% set show_footer = false %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link active" href="{{ url_for('admin.subscribers') }}"><i class="bi bi-people me-1"></i>Subscribers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.jobs') }}"><i class="bi bi-briefcase me-1"></i>Jobs</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.email_history') }}"><i class="bi bi-envelope me-1"></i>Emails</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.scraper_history') }}"><i class="bi bi-arrow-repeat me-1"></i>Scrapers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.logs') }}"><i class="bi bi-terminal me-1"></i>Logs</a></li>
+    </ul>
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Subscribers <span class="badge bg-primary">{{ subscribers.total }}</span></h5>
+        <a href="{{ url_for('admin.export_subscribers') }}" class="btn btn-success btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" name="search" class="form-control" value="{{ search }}" placeholder="Search email, role, skills, location...">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">All Status</option>
+                        <option value="verified" {% if status == 'verified' %}selected{% endif %}>Verified</option>
+                        <option value="unverified" {% if status == 'unverified' %}selected{% endif %}>Unverified</option>
+                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel me-1"></i>Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Location</th>
+                        <th>Skills</th>
+                        <th>Frequency</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in subscribers.items %}
+                    <tr>
+                        <td>{{ s.id }}</td>
+                        <td><a href="mailto:{{ s.email }}" class="text-decoration-none">{{ s.email }}</a></td>
+                        <td>{{ s.role or '-' }}</td>
+                        <td>{{ s.location or '-' }}</td>
+                        <td>
+                            {% if s.skills %}
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for skill in s.get_skills_list()[:3] %}
+                                <span class="badge bg-body-tertiary text-body-secondary">{{ skill }}</span>
+                                {% endfor %}
+                            </div>
+                            {% else %}-{% endif %}
+                        </td>
+                        <td><span class="badge bg-primary bg-opacity-10 text-primary">{{ s.frequency }}</span></td>
+                        <td>
+                            {% if s.is_verified and s.is_active %}
+                            <span class="badge bg-success bg-opacity-10 text-success">Active</span>
+                            {% elif not s.is_verified %}
+                            <span class="badge bg-warning bg-opacity-10 text-warning">Unverified</span>
+                            {% else %}
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ format_datetime(s.created_at) }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin.delete_subscriber', id=s.id) }}" class="d-inline" onsubmit="return confirm('Delete {{ s.email }}?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">No subscribers found</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if subscribers.pages > 1 %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% if subscribers.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('admin.subscribers', page=subscribers.prev_num, search=search, status=status) }}">&laquo;</a></li>
+            {% endif %}
+            {% for p in subscribers.iter_pages() %}
+                {% if p %}
+                    <li class="page-item {% if p == subscribers.page %}active{% endif %}"><a class="page-link" href="{{ url_for('admin.subscribers', page=p, search=search, status=status) }}">{{ p }}</a></li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if subscribers.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('admin.subscribers', page=subscribers.next_num, search=search, status=status) }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

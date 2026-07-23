@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f6f9; }
+        .container { max-width: 500px; margin: 20px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, #198754, #20c997); color: white; padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .body { padding: 30px; text-align: center; }
+        .verify-btn { display: inline-block; background: #0d6efd; color: white !important; text-decoration: none; padding: 14px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; margin: 20px 0; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; }
+        .footer p { color: #6c757d; font-size: 12px; margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ app_name }}</h1>
+        </div>
+        <div class="body">
+            <h2>Verify Your Email</h2>
+            <p>Thanks for subscribing! Please click the button below to verify your email address and start receiving job alerts.</p>
+            <a href="{{ verify_url }}" class="verify-btn">Verify Email Address</a>
+            <p style="color: #6c757d; font-size: 13px; margin-top: 15px;">
+                If the button doesn't work, copy and paste this link into your browser:<br>
+                <a href="{{ verify_url }}" style="color: #0d6efd; word-break: break-all;">{{ verify_url }}</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ app_name }}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Job Detail - Admin{% endblock %}
+{% set is_admin = true %}
+{% set show_footer = false %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('admin.jobs') }}" class="text-decoration-none">Jobs</a></li>
+            <li class="breadcrumb-item active">Job #{{ job.id }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h4 class="fw-bold mb-1">{{ job.title }}</h4>
+                            <p class="text-muted mb-0">
+                                <i class="bi bi-building me-1"></i>{{ job.company }}
+                                {% if job.location %} &bull; <i class="bi bi-geo-alt me-1"></i>{{ job.location }}{% endif %}
+                            </p>
+                        </div>
+                        <a href="{{ job.url }}" target="_blank" class="btn btn-primary btn-sm"><i class="bi bi-box-arrow-up-right me-1"></i>Apply</a>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        {% if job.salary %}
+                        <div class="col-md-4">
+                            <div class="p-2 bg-body-tertiary rounded">
+                                <small class="text-muted d-block">Salary</small>
+                                <span class="fw-semibold text-success">{{ job.salary }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if job.job_type %}
+                        <div class="col-md-4">
+                            <div class="p-2 bg-body-tertiary rounded">
+                                <small class="text-muted d-block">Job Type</small>
+                                <span class="fw-semibold">{{ job.job_type }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if job.posted_date %}
+                        <div class="col-md-4">
+                            <div class="p-2 bg-body-tertiary rounded">
+                                <small class="text-muted d-block">Posted</small>
+                                <span class="fw-semibold">{{ job.posted_date }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if job.skills %}
+                    <div class="mb-3">
+                        <h6 class="fw-semibold">Skills</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for skill in job.get_skills_list() %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary">{{ skill }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if job.description %}
+                    <div class="mb-3">
+                        <h6 class="fw-semibold">Description</h6>
+                        <p class="text-muted">{{ job.description }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3">Job Metadata</h6>
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr><td class="text-muted">ID</td><td class="fw-medium">{{ job.id }}</td></tr>
+                        <tr><td class="text-muted">Source</td><td class="fw-medium">{{ job.source }}</td></tr>
+                        <tr><td class="text-muted">Scraped At</td><td class="fw-medium">{{ format_datetime(job.scraped_at) }}</td></tr>
+                        <tr><td class="text-muted">URL</td><td><a href="{{ job.url }}" target="_blank" class="small text-truncate d-block" style="max-width:200px;">{{ job.url[:50] }}...</a></td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <a href="{{ job.url }}" target="_blank" class="btn btn-primary btn-sm w-100"><i class="bi bi-box-arrow-up-right me-1"></i>Open Original</a>
+                <form method="POST" action="{{ url_for('admin.delete_job', id=job.id) }}" onsubmit="return confirm('Delete this job?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

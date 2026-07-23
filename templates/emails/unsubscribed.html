@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f6f9; }
+        .container { max-width: 500px; margin: 20px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .header { background: linear-gradient(135deg, #6c757d, #495057); color: white; padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .body { padding: 30px; text-align: center; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; }
+        .footer p { color: #6c757d; font-size: 12px; margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ app_name }}</h1>
+        </div>
+        <div class="body">
+            <h2>You've Been Unsubscribed</h2>
+            <p>You will no longer receive job alerts from us. If you'd like to re-subscribe, visit <a href="{{ app_url }}">{{ app_url }}</a>.</p>
+            <p>We're sorry to see you go, and we wish you the best in your job search!</p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ app_name }}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
