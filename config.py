@@ -10,6 +10,13 @@ class Config:
     _db_url = os.environ.get('JOB_ALERT_DATABASE_URL', '')
     SQLALCHEMY_DATABASE_URI = _db_url if _db_url.startswith(('sqlite://', 'postgresql://', 'mysql://')) else f'sqlite:///{os.path.join(BASE_DIR, "database.db")}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Connection pool — prevent SSL/dead-connection errors after worker kills
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,     # Test connections before using them
+        'pool_recycle': 300,       # Recycle connections every 5 min
+        'pool_size': 5,
+        'max_overflow': 10,
+    }
 
     # Admin credentials (used only for seeding first user)
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')

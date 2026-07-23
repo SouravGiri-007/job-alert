@@ -1,5 +1,5 @@
 """Scraper base class and implementations for job sources.
-Includes bleach sanitization on all scraped text fields.
+Lightweight sanitization via regex — no heavy HTML parser dependencies.
 """
 from bs4 import BeautifulSoup
 import requests
@@ -7,15 +7,11 @@ import cloudscraper
 import re
 import time
 import random
-import bleach
 from datetime import datetime, timezone
 
 from utils.logger import get_logger, log_event
 
 logger = get_logger('scrapers')
-
-# Allowed HTML tags for scraped job descriptions
-BLEACH_ALLOWED_TAGS = ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'span', 'div']
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
@@ -33,14 +29,22 @@ HEADERS = {
 
 
 def sanitize_text(text):
-    """Sanitize scraped text: strip dangerous HTML, limit length."""
+    """Sanitize scraped text: strip HTML tags, dangerous content, limit length.
+    Uses lightweight regex instead of bleach/html5lib to avoid OOM on low-memory hosts.
+    """
     if not text:
         return ''
-    # Remove script and style elements
+    # Remove script and style blocks
     text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
     text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    # Strip remaining tags or clean with bleach
-    text = bleach.clean(text, tags=BLEACH_ALLOWED_TAGS, strip=True)
+    # Strip all remaining HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # Decode common HTML entities
+    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    text = text.replace('&quot;', '"').replace('&#39;', "'")
+    text = re.sub(r'&#\d+;', ' ', text)  # Numeric entities
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
     # Limit length
     return text[:2000]
 
