@@ -68,18 +68,27 @@ def create_app(config_class=Config):
     # Register user loader for Flask-Login
     login_manager.user_loader(load_admin_user)
 
-    # Create tables and seed admin
+    # Create tables and seed admin (non-fatal if DB is down)
     with app.app_context():
-        db.create_all()
-        # Seed default admin user if none exists
-        AdminUser.seed_default_admin(
-            app.config['ADMIN_USERNAME'],
-            app.config['ADMIN_PASSWORD'],
-        )
+        try:
+            db.create_all()
+            # Seed default admin user if none exists
+            AdminUser.seed_default_admin(
+                app.config['ADMIN_USERNAME'],
+                app.config['ADMIN_PASSWORD'],
+            )
+        except Exception as e:
+            app.logger.error(
+                f'Database init failed: {e}. '
+                'The app will retry on the first request.'
+            )
 
-    # Initialize scheduler
+    # Initialize scheduler (only if DB is available)
     from scheduler.scheduler import init_scheduler
-    init_scheduler(app)
+    try:
+        init_scheduler(app)
+    except Exception as e:
+        app.logger.error(f'Scheduler init failed: {e}. Scheduler will be unavailable until DB is reachable.')
 
     # Run security checks
     _check_security(app)
