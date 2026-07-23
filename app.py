@@ -95,8 +95,10 @@ def create_app(config_class=Config):
     return app
 
 
+# Module-level app for Gunicorn (used by: gunicorn app:app)
+app = create_app()
+
 if __name__ == '__main__':
     import os
     debug = os.environ.get('FLASK_DEBUG', '1') == '1'
-    app = create_app()
     app.run(debug=debug, port=5000)
