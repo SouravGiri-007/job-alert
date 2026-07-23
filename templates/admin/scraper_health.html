@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Scraper Health - Admin{% endblock %}
+{% set is_admin = true %}
+{% set show_footer = false %}
+
+{% block extra_css %}
+<style>
+.health-indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+    flex-shrink: 0;
+}
+.health-indicator.healthy {
+    background: #198754;
+    box-shadow: 0 0 8px rgba(25, 135, 84, 0.5);
+}
+.health-indicator.degraded {
+    background: #ffc107;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+.health-indicator.down,
+.health-indicator.failed {
+    background: #dc3545;
+    box-shadow: 0 0 8px rgba(220, 53, 69, 0.5);
+}
+.health-indicator.no_data {
+    background: #6c757d;
+    box-shadow: 0 0 8px rgba(108, 117, 125, 0.3);
+}
+.health-indicator.pending {
+    background: #0d6efd;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.health-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 4px solid #dee2e6;
+}
+.health-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.12) !important;
+}
+.health-card.border-healthy { border-left-color: #198754; }
+.health-card.border-degraded { border-left-color: #ffc107; }
+.health-card.border-failed,
+.health-card.border-down { border-left-color: #dc3545; }
+.health-card.border-no_data { border-left-color: #6c757d; }
+
+.overall-badge {
+    font-size: 0.95rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: 50rem;
+    font-weight: 600;
+}
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.metric-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+.success-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+.success-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Admin Nav Tabs -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.subscribers') }}"><i class="bi bi-people me-1"></i>Subscribers</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.jobs') }}"><i class="bi bi-briefcase me-1"></i>Jobs</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.email_history') }}"><i class="bi bi-envelope me-1"></i>Emails</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.scraper_history') }}"><i class="bi bi-arrow-repeat me-1"></i>Scrapers</a></li>
+        <li class="nav-item"><a class="nav-link active" href="{{ url_for('admin.scraper_health') }}"><i class="bi bi-heart-pulse me-1"></i>Health</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.logs') }}"><i class="bi bi-terminal me-1"></i>Logs</a></li>
+    </ul>
+
+    <!-- Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
+        <div>
+            <h5 class="fw-bold mb-1"><i class="bi bi-heart-pulse me-2"></i>Scraper Health Dashboard</h5>
+            <p class="text-muted small mb-0">Status of all job scrapers over the last 24 hours</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <!-- Overall Health Badge -->
+            {% if health.overall_health == 'healthy' %}
+            <span class="overall-badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                <i class="bi bi-check-circle-fill me-1"></i> All Systems Healthy
+            </span>
+            {% elif health.overall_health == 'degraded' %}
+            <span class="overall-badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> Degraded
+            </span>
+            {% else %}
+            <span class="overall-badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">
+                <i class="bi bi-x-circle-fill me-1"></i> Down
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Overall Stats Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="health-indicator {{ health.overall_health }}"></div>
+                    <div>
+                        <div class="metric-value {% if health.overall_health == 'healthy' %}text-success{% elif health.overall_health == 'degraded' %}text-warning{% else %}text-danger{% endif %}">
+                            {{ health.overall_success_rate }}%
+                        </div>
+                        <div class="metric-label">Overall Success Rate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-arrow-repeat fs-1 text-primary opacity-50"></i>
+                    <div>
+                        <div class="metric-value">{{ health.total_runs_last_24h }}</div>
+                        <div class="metric-label">Total Runs (24h)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-globe fs-1 text-info opacity-50"></i>
+                    <div>
+                        <div class="metric-value">{{ health.sources | length }}</div>
+                        <div class="metric-label">Active Sources</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-briefcase fs-1 text-success opacity-50"></i>
+                    <div>
+                        <div class="metric-value">{{ health.sources | sum(attribute='total_jobs_found') }}</div>
+                        <div class="metric-label">Jobs Found (24h)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- One-line refresh hint -->
+    <div class="d-flex justify-content-end mb-3">
+        <a href="{{ url_for('admin.scraper_health') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </a>
+    </div>
+
+    <!-- Per-Source Health Cards -->
+    <div class="row g-3">
+        {% for source in health.sources %}
+        {% set border = 'border-' + source.last_status if source.last_status in ('healthy', 'degraded', 'failed', 'down', 'no_data') else 'border-secondary' %}
+        <div class="col-xl-4 col-lg-6">
+            <div class="card border-0 shadow-sm health-card {{ 'border-' + ('healthy' if source.last_status == 'success' else source.last_status) if source.last_status in ('success', 'failed', 'no_data', 'pending') else 'border-no_data' }}">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="health-indicator {{ 'healthy' if source.last_status == 'success' else source.last_status }}"></span>
+                            <h6 class="fw-bold mb-0">{{ source.source }}</h6>
+                        </div>
+                        <span class="badge {% if source.last_status == 'success' %}bg-success{% elif source.last_status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %} bg-opacity-10 
+                               {% if source.last_status == 'success' %}text-success{% elif source.last_status == 'failed' %}text-danger{% else %}text-secondary{% endif %}">
+                            {% if source.last_status == 'success' %}
+                            <i class="bi bi-check-circle me-1"></i>Last: OK
+                            {% elif source.last_status == 'failed' %}
+                            <i class="bi bi-x-circle me-1"></i>Last: Failed
+                            {% elif source.last_status == 'pending' %}
+                            <i class="bi bi-hourglass me-1"></i>Running
+                            {% else %}
+                            <i class="bi bi-dash-circle me-1"></i>No Data
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <!-- Success Rate Bar -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted">Success rate</span>
+                            <span class="fw-semibold {% if source.success_rate == 100 %}text-success{% elif source.success_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ source.success_rate }}%
+                            </span>
+                        </div>
+                        <div class="success-bar">
+                            <div class="success-bar-fill {% if source.success_rate == 100 %}bg-success{% elif source.success_rate >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                 style="width: {{ source.success_rate }}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-4 text-center">
+                            <div class="fw-bold fs-5">{{ source.total_runs }}</div>
+                            <div class="metric-label">Runs</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="fw-bold fs-5 text-success">{{ source.successful_runs }}</div>
+                            <div class="metric-label">Success</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="fw-bold fs-5 {% if source.failed_runs > 0 %}text-danger{% else %}text-muted{% endif %}">{{ source.failed_runs }}</div>
+                            <div class="metric-label">Failed</div>
+                        </div>
+                    </div>
+
+                    <!-- Jobs Found -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="d-flex align-items-center gap-2 p-2 rounded bg-light bg-opacity-50">
+                                <i class="bi bi-search text-primary small"></i>
+                                <div>
+                                    <div class="fw-semibold small">{{ source.total_jobs_found }}</div>
+                                    <div class="metric-label" style="font-size:0.7rem;">Jobs Found</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center gap-2 p-2 rounded bg-light bg-opacity-50">
+                                <i class="bi bi-star text-success small"></i>
+                                <div>
+                                    <div class="fw-semibold small">{{ source.total_jobs_new }}</div>
+                                    <div class="metric-label" style="font-size:0.7rem;">New Jobs</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timing Info -->
+                    <div class="small text-muted">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="bi bi-clock me-1"></i>Last run</span>
+                            <span>{{ format_datetime(source.last_run_at) if source.last_run_at else 'Never' }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="bi bi-hourglass me-1"></i>Last duration</span>
+                            <span>{{ format_duration(source.last_duration) if source.last_duration is not none else 'N/A' }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span><i class="bi bi-bar-chart me-1"></i>Avg duration</span>
+                            <span>{{ format_duration(source.avg_duration) if source.avg_duration is not none else 'N/A' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-activity fs-1 text-muted mb-3 d-block"></i>
+                    <h6 class="text-muted">No scraper data yet</h6>
+                    <p class="small text-muted mb-0">Run a scraper to see health metrics here.</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

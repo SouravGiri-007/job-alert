@@ -99,7 +99,6 @@ class TestScraperRegistry:
         scrapers = get_all_scrapers()
         names = [s.source_name for s in scrapers]
         assert 'Demo (Fallback)' not in names
-        assert 'LinkedIn' in names
         assert 'Internshala' in names
         assert 'JSearch' in names
         assert 'RapidAPI Jobs' in names

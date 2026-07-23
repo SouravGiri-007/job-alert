@@ -18,6 +18,7 @@ from services.stats_service import (
     get_source_distribution,
     get_recent_emails,
     get_recent_scrapes,
+    get_scraper_health,
 )
 import csv as csv_module
 from io import StringIO
@@ -298,6 +299,21 @@ def scraper_history():
         'admin/scraper_history.html',
         history=history,
         source=source,
+        format_datetime=format_datetime,
+        format_duration=format_duration,
+    )
+
+
+# ── Scraper Health Dashboard ──
+
+@admin_bp.route('/scraper-health')
+@login_required
+def scraper_health():
+    """Scraper health dashboard — green/red status lights for each source."""
+    health_data = get_scraper_health(hours=24)
+    return render_template(
+        'admin/scraper_health.html',
+        health=health_data,
         format_datetime=format_datetime,
         format_duration=format_duration,
     )
