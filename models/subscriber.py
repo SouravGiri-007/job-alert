@@ -19,7 +19,7 @@ class Subscriber(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    email_histories = db.relationship('EmailHistory', back_populates='subscriber', lazy='dynamic')
+    email_histories = db.relationship('EmailHistory', back_populates='subscriber', lazy='dynamic', cascade='all')
 
     __table_args__ = (
         db.Index('idx_subscriber_verified_active', 'is_verified', 'is_active'),
