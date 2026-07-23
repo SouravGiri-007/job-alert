@@ -25,9 +25,9 @@ def _check_security(app: Flask):
             'FLASK_DEBUG=0 or not passing debug=True.',
             RuntimeWarning
         )
-    if not app.config.get('SMTP_USERNAME'):
+    if not app.config.get('RESEND_API_KEY'):
         warnings.warn(
-            'SECURITY: SMTP username not configured. Email delivery will fail.',
+            'SECURITY: Resend API key not configured. Email delivery will fail.',
             RuntimeWarning
         )
 

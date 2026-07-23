@@ -15,12 +15,9 @@ class Config:
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-    # SMTP Configuration
-    SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
-    SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
-    SMTP_USERNAME = os.environ.get('SMTP_USERNAME', '')
-    SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
-    MAIL_FROM = os.environ.get('MAIL_FROM', 'noreply@jobalert.com')
+    # Resend Email Configuration
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+    MAIL_FROM = os.environ.get('MAIL_FROM', 'onboarding@resend.dev')
     MAIL_FROM_NAME = os.environ.get('MAIL_FROM_NAME', 'Smart Job Alert')
 
     # Scheduler

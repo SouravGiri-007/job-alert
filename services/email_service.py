@@ -1,9 +1,6 @@
-"""Email service for sending job alerts with parallel delivery support."""
-import smtplib
-import socket
+"""Email service for sending job alerts via Resend API with parallel delivery support."""
+import resend
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from flask import render_template, current_app
 from utils.logger import get_logger, log_event
 
@@ -33,41 +30,29 @@ def build_email_text(subscriber, jobs):
 
 
 def _send_single(to_email, subject, html_body, text_body=''):
-    """Send one email via SMTP — extracted for ThreadPoolExecutor use."""
+    """Send one email via Resend API."""
+    api_key = current_app.config.get('RESEND_API_KEY', '')
+    if not api_key:
+        log_event('EMAIL_FAILED', f'Resend API key not configured. Cannot send to {to_email}.', 'error')
+        return (to_email, False, 'RESEND_API_KEY not set')
+
     try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = f"{current_app.config['MAIL_FROM_NAME']} <{current_app.config['MAIL_FROM']}>"
-        msg['To'] = to_email
-        msg['Reply-To'] = current_app.config['MAIL_FROM']
-        msg['X-Priority'] = '1'
-        msg['X-Mailer'] = 'Smart Job Alert'
-        msg['List-Unsubscribe'] = f"<mailto:{current_app.config['MAIL_FROM']}?subject=unsubscribe>"
+        resend.api_key = api_key
+
+        sender = f"{current_app.config['MAIL_FROM_NAME']} <{current_app.config['MAIL_FROM']}>"
+
+        params = {
+            "from": sender,
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body,
+        }
 
         if text_body:
-            msg.attach(MIMEText(text_body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
+            params["text"] = text_body
 
-        smtp_host = current_app.config['SMTP_SERVER']
-        smtp_port = current_app.config['SMTP_PORT']
-
-        # Force IPv4 resolution — Render doesn't route outbound IPv6,
-        # and smtp.gmail.com resolves to an IPv6 address by default.
-        addr_info = socket.getaddrinfo(smtp_host, smtp_port, socket.AF_INET, socket.SOCK_STREAM)
-        ipv4_addr = addr_info[0][4][0]
-
-        with smtplib.SMTP(ipv4_addr, smtp_port, timeout=10) as server:
-            server.ehlo(smtp_host)  # explicit EHLO since we're connecting by IP, not hostname
-            server.starttls()
-            server.ehlo(smtp_host)
-            if current_app.config['SMTP_USERNAME']:
-                server.login(
-                    current_app.config['SMTP_USERNAME'],
-                    current_app.config['SMTP_PASSWORD']
-                )
-            server.send_message(msg)
-
-        log_event('EMAIL_SENT', f'Email sent to {to_email}')
+        response = resend.Emails.send(params)
+        log_event('EMAIL_SENT', f'Email sent to {to_email} (id: {response.get("id", "unknown")})')
         return (to_email, True, '')
     except Exception as e:
         error_msg = str(e)
@@ -75,9 +60,9 @@ def _send_single(to_email, subject, html_body, text_body=''):
         logger.error(f'Email send error for {to_email}: {e}')
         return (to_email, False, error_msg)
 
-    
+
 def send_email(to_email, subject, html_body, text_body=''):
-    """Send an email via SMTP (single send — backward compatible)."""
+    """Send an email via Resend API (single send)."""
     _, success, error = _send_single(to_email, subject, html_body, text_body)
     return success, error
 
@@ -121,11 +106,11 @@ def send_job_alert(subscriber, jobs):
 
 def send_job_alerts_parallel(subscribers_with_jobs, max_workers=4):
     """Send multiple job alerts in parallel using a thread pool.
-    
+
     Args:
         subscribers_with_jobs: list of (subscriber, jobs_list) tuples
         max_workers: number of parallel threads (default: 4)
-    
+
     Returns:
         (sent_count, failed_count)
     """
